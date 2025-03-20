@@ -157,6 +157,23 @@ mcp-gateway/
 └── scripts/           # Build and utility scripts
 ```
 
+### Testing
+
+The project uses Playwright for end-to-end testing of the admin interface. To run the tests:
+
+```bash
+cd frontend
+npm test
+```
+
+Note: Tests are designed to run in isolation and will mock all necessary API responses. Each test should:
+- Mock all required API endpoints
+- Start from a clean state
+- Not depend on previous test runs or existing data
+- Clean up any created resources
+
+When writing new tests, ensure they follow these principles to maintain reliability and reproducibility.
+
 ## Contributing
 
 This project implements the Model Context Protocol (MCP). For more information about the protocol, see the [MCP Specification](https://spec.modelcontextprotocol.io/).
