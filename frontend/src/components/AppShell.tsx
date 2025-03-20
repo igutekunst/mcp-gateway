@@ -39,10 +39,21 @@ export function AppShell() {
         borderColor="gray.200"
         p={4}
       >
-        <Stack>
-          <NavButton to="/">Dashboard</NavButton>
-          <NavButton to="/apps">Apps</NavButton>
-          <NavButton to="/keys">API Keys</NavButton>
+        <Stack spacing={1}>
+          <NavButton to="/">Overview</NavButton>
+          <NavButton to="/tool-providers">Tool Providers</NavButton>
+          <NavButton to="/agents">Agents</NavButton>
+          <Box pt={4}>
+            <Text fontSize="sm" color="gray.500" fontWeight="medium" mb={2}>
+              System
+            </Text>
+            <Stack spacing={1}>
+              <NavButton to="/monitoring">Monitoring</NavButton>
+              <NavButton to="/debug">Debug</NavButton>
+              <NavButton to="/settings">Settings</NavButton>
+              <NavButton to="/help">Help</NavButton>
+            </Stack>
+          </Box>
         </Stack>
       </Box>
 
@@ -59,7 +70,7 @@ export function AppShell() {
           </Text>
         </Box>
 
-        <Box flex={1} p={4} position="relative">
+        <Box flex={1} p={4} position="relative" bg="gray.50">
           <Outlet />
           <StatusBar />
         </Box>

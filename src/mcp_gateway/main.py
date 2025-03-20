@@ -1,25 +1,12 @@
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
 
 from .api.auth import router as auth_router
+from .api.health import router as health_router
 from .models.base import Base, engine
-
-class HealthResponse(BaseModel):
-    status: str
-    version: str
-    started_at: datetime
-    uptime_seconds: float
-
-class AppState:
-    def __init__(self):
-        self.started_at = datetime.utcnow()
-
-app_state = AppState()
 
 app = FastAPI(
     title="MCP Gateway",
@@ -37,27 +24,12 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(auth_router)
+app.include_router(auth_router, prefix="/api")
+app.include_router(health_router, prefix="/api")
 
 # Mount static files
 static_dir = Path(__file__).parent / "static"
 app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
-
-@app.get("/api/health", response_model=HealthResponse)
-async def health_check():
-    """
-    Health check endpoint that provides basic server status and uptime information.
-    Useful for monitoring and debugging.
-    """
-    now = datetime.utcnow()
-    uptime = (now - app_state.started_at).total_seconds()
-    
-    return HealthResponse(
-        status="healthy",
-        version="0.1.0",
-        started_at=app_state.started_at,
-        uptime_seconds=uptime,
-    )
 
 @app.on_event("startup")
 async def startup():
