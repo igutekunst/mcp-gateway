@@ -1,7 +1,9 @@
-import { Title } from '@mantine/core';
+import { Box, Heading } from '@chakra-ui/react';
 
 export function Keys() {
   return (
-    <Title order={2}>API Keys</Title>
+    <Box>
+      <Heading mb={6}>API Keys</Heading>
+    </Box>
   );
 } 

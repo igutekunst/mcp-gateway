@@ -1,39 +1,69 @@
-import { AppShell as MantineAppShell, Title, Box } from '@mantine/core';
-import { Link } from 'react-router-dom';
+import { Box, Flex, Text, Stack, Button } from '@chakra-ui/react';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { StatusBar } from './StatusBar';
 
-interface AppShellProps {
+interface NavButtonProps {
+  to: string;
   children: React.ReactNode;
 }
 
-export function AppShell({ children }: AppShellProps) {
+function NavButton({ to, children }: NavButtonProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isActive = location.pathname === to || (to !== '/' && location.pathname.startsWith(to));
+
   return (
-    <MantineAppShell
-      padding="md"
-      navbar={{
-        width: { base: 300 },
-        breakpoint: 'sm',
-      }}
-      header={{
-        height: 60,
+    <Button
+      variant="ghost"
+      w="full"
+      justifyContent="flex-start"
+      bg={isActive ? 'gray.100' : 'transparent'}
+      onClick={() => navigate(to)}
+      _hover={{
+        bg: 'gray.50',
       }}
     >
-      <Box p="xs">
-        <Title order={1}>MCP Gateway</Title>
+      {children}
+    </Button>
+  );
+}
+
+export function AppShell() {
+  return (
+    <Flex h="100vh">
+      <Box
+        as="nav"
+        w="240px"
+        bg="white"
+        borderRight="1px"
+        borderColor="gray.200"
+        p={4}
+      >
+        <Stack>
+          <NavButton to="/">Dashboard</NavButton>
+          <NavButton to="/apps">Apps</NavButton>
+          <NavButton to="/keys">API Keys</NavButton>
+        </Stack>
       </Box>
-      <Box p="xs">
-        <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <Title order={3} mb="md">Dashboard</Title>
-        </Link>
-        <Link to="/apps" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <Title order={3} mb="md">Apps</Title>
-        </Link>
-        <Link to="/keys" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <Title order={3}>API Keys</Title>
-        </Link>
-      </Box>
-      <Box p="md">
-        {children}
-      </Box>
-    </MantineAppShell>
+
+      <Flex flex={1} direction="column">
+        <Box
+          as="header"
+          bg="white"
+          borderBottom="1px"
+          borderColor="gray.200"
+          p={4}
+        >
+          <Text fontSize="xl" fontWeight="bold">
+            MCP Gateway
+          </Text>
+        </Box>
+
+        <Box flex={1} p={4} position="relative">
+          <Outlet />
+          <StatusBar />
+        </Box>
+      </Flex>
+    </Flex>
   );
 } 

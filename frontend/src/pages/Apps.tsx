@@ -1,7 +1,9 @@
-import { Title } from '@mantine/core';
+import { Box, Heading } from '@chakra-ui/react';
 
 export function Apps() {
   return (
-    <Title order={2}>Apps</Title>
+    <Box>
+      <Heading mb={6}>Apps</Heading>
+    </Box>
   );
 } 
