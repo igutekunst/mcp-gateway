@@ -1,20 +1,30 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 
-const fetchHealth = async () => {
+interface HealthCheck {
+  status: string;
+  version: string;
+  started_at: string;
+  uptime_seconds: number;
+}
+
+async function fetchHealth(): Promise<HealthCheck> {
   const response = await fetch('/api/health');
   if (!response.ok) {
     throw new Error('Health check failed');
   }
   return response.json();
-};
+}
 
 export function StatusBar() {
-  const { isError, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['health'],
     queryFn: fetchHealth,
     refetchInterval: 5000,
   });
+
+  const bgColor = 'white';
+  const borderColor = 'gray.200';
 
   return (
     <Box
@@ -22,25 +32,26 @@ export function StatusBar() {
       bottom={0}
       left={0}
       right={0}
+      bg={bgColor}
       borderTop="1px"
-      borderColor="gray.200"
-      p={3}
-      bg="white"
+      borderColor={borderColor}
+      p={2}
       zIndex={1000}
     >
-      <Flex justify="flex-end" align="center" gap={2}>
-        <Text
-          fontSize="sm"
-          color={isLoading ? 'gray.500' : isError ? 'red.500' : 'green.500'}
-        >
-          {isLoading ? "Checking system status..." : isError ? "Health check failed" : "System healthy"}
-        </Text>
+      <Flex align="center" gap={2}>
         <Box
-          w="8px"
-          h="8px"
+          w={2}
+          h={2}
           borderRadius="full"
           bg={isLoading ? 'yellow.400' : isError ? 'red.500' : 'green.500'}
         />
+        <Text color={isLoading ? 'gray.500' : isError ? 'red.500' : 'green.500'}>
+          {isLoading
+            ? 'Checking system status...'
+            : isError
+            ? 'Health check failed'
+            : `System healthy (v${data?.version})`}
+        </Text>
       </Flex>
     </Box>
   );
