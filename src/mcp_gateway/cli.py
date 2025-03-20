@@ -7,12 +7,15 @@ import json
 import subprocess
 import os
 import sys
+import websockets
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlencode
 
 from .main import app
 from .models.base import AsyncSessionLocal
 from .services.auth import AuthService
+from .schemas.auth import AppIDCreate, APIKeyCreate
 
 cli = typer.Typer()
 console = Console()
@@ -78,10 +81,10 @@ def create_app(
     async def _create_app():
         async with AsyncSessionLocal() as session:
             auth_service = AuthService(session)
-            app = await auth_service.create_app_id({
-                "name": name,
-                "description": description
-            })
+            app = await auth_service.create_app_id(AppIDCreate(
+                name=name,
+                description=description
+            ))
             return app
 
     app = asyncio.run(_create_app())
@@ -96,10 +99,10 @@ def create_key(
     async def _create_key():
         async with AsyncSessionLocal() as session:
             auth_service = AuthService(session)
-            key, secret = await auth_service.create_api_key({
-                "name": name,
-                "app_id": app_id
-            })
+            key, secret = await auth_service.create_api_key(APIKeyCreate(
+                name=name,
+                app_id=app_id
+            ))
             return key, secret
 
     key, secret = asyncio.run(_create_key())
@@ -161,6 +164,50 @@ def list_keys(app_id: Optional[int] = typer.Option(None, help="Filter by app ID"
         )
 
     console.print(table)
+
+@cli.command()
+def bridge(
+    api_key: str = typer.Option(..., help="API key for authentication", envvar="MCP_API_KEY"),
+    host: str = typer.Option("localhost", help="MCP server host"),
+    port: int = typer.Option(8000, help="MCP server port"),
+):
+    """
+    Connect to MCP server as a bridge client.
+    This allows the CLI to act as a bridge between local commands and the MCP server.
+    """
+    async def run_bridge():
+        # Initial connection to get WebSocket URL
+        url = f"ws://{host}:{port}/api/bridge/connect"
+        headers = {"X-API-Key": api_key}
+        
+        try:
+            async with websockets.connect(url, additional_headers=headers) as websocket:
+                console.print("[green]Connected to MCP server[/green]")
+                console.print("Listening for commands... Press Ctrl+C to exit")
+                
+                try:
+                    while True:
+                        message = await websocket.recv()
+                        try:
+                            command = json.loads(message)
+                            console.print(f"[blue]Received command:[/blue] {command}")
+                            # TODO: Execute command and send response
+                            response = {"status": "success", "result": "Command received"}
+                            await websocket.send(json.dumps(response))
+                        except json.JSONDecodeError:
+                            console.print(f"[yellow]Received invalid JSON message:[/yellow] {message}")
+                except websockets.exceptions.ConnectionClosed:
+                    console.print("[red]WebSocket connection closed[/red]")
+                except KeyboardInterrupt:
+                    console.print("\n[yellow]Bridge connection terminated by user[/yellow]")
+        
+        except websockets.exceptions.WebSocketException as e:
+            console.print(f"[red]Failed to connect to MCP server:[/red] {str(e)}")
+
+    try:
+        asyncio.run(run_bridge())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Bridge terminated[/yellow]")
 
 if __name__ == "__main__":
     cli() 
