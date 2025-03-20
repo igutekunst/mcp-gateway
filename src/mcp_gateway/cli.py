@@ -16,6 +16,7 @@ from .main import app
 from .models.base import AsyncSessionLocal
 from .services.auth import AuthService
 from .schemas.auth import AppIDCreate, APIKeyCreate
+from .models.auth import AppType
 
 cli = typer.Typer()
 console = Console()
@@ -75,6 +76,7 @@ def serve(
 @cli.command()
 def create_app(
     name: str = typer.Argument(..., help="Name of the app"),
+    type: AppType = typer.Option(AppType.TOOL_PROVIDER, help="Type of app (tool_provider or agent)"),
     description: str = typer.Option(None, help="Description of the app"),
 ):
     """Create a new app ID."""
@@ -83,12 +85,13 @@ def create_app(
             auth_service = AuthService(session)
             app = await auth_service.create_app_id(AppIDCreate(
                 name=name,
+                type=type,
                 description=description
             ))
             return app
 
     app = asyncio.run(_create_app())
-    console.print(f"Created app [green]{app.name}[/green] with ID: [blue]{app.app_id}[/blue]")
+    console.print(f"Created [green]{app.type.value}[/green] app [blue]{app.name}[/blue] with ID: [yellow]{app.app_id}[/yellow]")
 
 @cli.command()
 def create_key(
@@ -123,14 +126,16 @@ def list_apps():
     table.add_column("ID", justify="right", style="cyan")
     table.add_column("App ID", style="green")
     table.add_column("Name", style="blue")
+    table.add_column("Type", style="magenta")
     table.add_column("Description")
-    table.add_column("Status", style="magenta")
+    table.add_column("Status", style="yellow")
 
     for app in apps:
         table.add_row(
             str(app.id),
             app.app_id,
             app.name,
+            app.type.value if app.type else "unknown",
             app.description or "",
             "Active" if app.is_active else "Inactive"
         )

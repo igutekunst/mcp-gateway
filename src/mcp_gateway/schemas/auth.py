@@ -1,9 +1,11 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
+from ..models.auth import AppType
 
 class AppIDBase(BaseModel):
     name: str
     description: str | None = None
+    type: AppType
 
 class AppIDCreate(AppIDBase):
     pass
