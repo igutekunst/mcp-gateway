@@ -1,18 +1,34 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 import json
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import uuid
 import logging
+import os
 from ..models.base import get_db
 from ..models.auth import AppID, APIKey
 from ..services.auth import AuthService
 from ..core.bridge import MCPBridge
 from ..tools import ToolRegistry
+from ..schemas.auth import BridgeLogBatchCreate, BridgeLogList, BridgeLogResponse
 
 router = APIRouter()
+
+# Configure logging to only write to file
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())  # Prevent output to stdout
+logger.setLevel(logging.DEBUG)
+
+# Create logs directory if it doesn't exist
+os.makedirs("logs", exist_ok=True)
+
+# Add file handler for bridge API logs
+file_handler = logging.FileHandler("logs/bridge_api.log")
+file_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 # Store active bridge connections
 bridge_connections: Dict[str, MCPBridge] = {}
@@ -86,4 +102,51 @@ async def handle_websocket(
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
         if connection_id and connection_id in bridge_connections:
-            del bridge_connections[connection_id] 
+            del bridge_connections[connection_id]
+
+@router.post("/logs", response_model=List[BridgeLogResponse])
+async def create_logs(
+    logs: BridgeLogBatchCreate,
+    api_key: str = Depends(AuthService.get_api_key),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create multiple log entries."""
+    try:
+        auth_service = AuthService(db)
+        app = await auth_service.get_app_by_api_key(api_key)
+        if not app:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        
+        created_logs = await auth_service.create_logs(app.id, logs)
+        return created_logs
+    except Exception as e:
+        logger.error(f"Error creating logs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/logs/{app_id}", response_model=BridgeLogList)
+async def get_logs(
+    app_id: int,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    level: Optional[str] = Query(None, regex="^(DEBUG|INFO|WARNING|ERROR)$"),
+    connection_id: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get logs for an app with filtering."""
+    try:
+        auth_service = AuthService(db)
+        logs, total = await auth_service.get_logs(
+            app_id=app_id,
+            start_time=start_time,
+            end_time=end_time,
+            level=level,
+            connection_id=connection_id,
+            limit=limit,
+            offset=offset
+        )
+        return BridgeLogList(total=total, logs=logs)
+    except Exception as e:
+        logger.error(f"Error retrieving logs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) 

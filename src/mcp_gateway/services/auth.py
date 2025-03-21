@@ -1,24 +1,29 @@
 import secrets
 import uuid
 from datetime import datetime
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from passlib.hash import bcrypt
+from sqlalchemy.orm import selectinload
+import bcrypt
+from fastapi import Depends, HTTPException, Header
+from typing import Optional, List
 
-from ..models.auth import AppID, APIKey
-from ..schemas.auth import AppIDCreate, APIKeyCreate
+from ..models.auth import AppID, APIKey, AppType, BridgeLog
+from ..schemas.auth import AppIDCreate, APIKeyCreate, BridgeLogCreate, BridgeLogBatchCreate
+from ..models.base import get_db
 
 class AuthService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_app_id(self, app: AppIDCreate) -> tuple[AppID, str]:
+    async def create_app_id(self, app: AppIDCreate) -> AppID:
         """Create a new app ID with a unique identifier."""
         app_id_str = str(uuid.uuid4())
         db_app = AppID(
             app_id=app_id_str,
             name=app.name,
             description=app.description,
+            type=app.type,
         )
         self.db.add(db_app)
         await self.db.commit()
@@ -28,7 +33,9 @@ class AuthService:
     async def create_api_key(self, api_key: APIKeyCreate) -> tuple[APIKey, str]:
         """Create a new API key and return both the model and the raw key."""
         key = secrets.token_urlsafe(32)
-        key_hash = bcrypt.hash(key)
+        key_bytes = key.encode('utf-8')
+        salt = bcrypt.gensalt()
+        key_hash = bcrypt.hashpw(key_bytes, salt).decode('utf-8')
         
         db_key = APIKey(
             key_hash=key_hash,
@@ -40,17 +47,29 @@ class AuthService:
         await self.db.refresh(db_key)
         return db_key, key
 
-    async def verify_api_key(self, key: str) -> APIKey | None:
-        """Verify an API key and return the associated model if valid."""
-        stmt = select(APIKey).where(APIKey.is_active == True)
-        result = await self.db.execute(stmt)
-        api_keys = result.scalars().all()
+    async def update_last_connected(self, app_id: int) -> None:
+        """Update the last_connected timestamp for an app."""
+        app = await self.db.get(AppID, app_id)
+        if app:
+            app.last_connected = datetime.utcnow()
+            await self.db.commit()
 
-        for api_key in api_keys:
-            if bcrypt.verify(key, api_key.key_hash):
-                api_key.last_used_at = datetime.utcnow()
+    async def verify_api_key(self, api_key: str) -> AppID | None:
+        """Verify an API key and return the associated app if valid."""
+        # Find all active API keys
+        stmt = select(APIKey).options(selectinload(APIKey.app)).where(APIKey.is_active == True)
+        result = await self.db.execute(stmt)
+        keys = result.scalars().all()
+        
+        # Check each key's hash
+        key_bytes = api_key.encode('utf-8')
+        for key in keys:
+            if bcrypt.checkpw(key_bytes, key.key_hash.encode('utf-8')):
+                # Update last used timestamp
+                key.last_used_at = datetime.utcnow()
                 await self.db.commit()
-                return api_key
+                return key.app
+        
         return None
 
     async def get_app_by_id(self, app_id: str) -> AppID | None:
@@ -59,9 +78,11 @@ class AuthService:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_apps(self) -> list[AppID]:
-        """List all registered apps."""
+    async def list_apps(self, type: AppType | None = None) -> list[AppID]:
+        """List all registered apps, optionally filtered by type."""
         stmt = select(AppID)
+        if type is not None:
+            stmt = stmt.where(AppID.type == type)
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
@@ -71,4 +92,87 @@ class AuthService:
         if app_id is not None:
             stmt = stmt.where(APIKey.app_id == app_id)
         result = await self.db.execute(stmt)
-        return result.scalars().all() 
+        return result.scalars().all()
+
+    async def get_app_by_api_key(self, api_key: str) -> Optional[AppID]:
+        """Get app by API key"""
+        # Find all active API keys
+        stmt = select(APIKey).options(selectinload(APIKey.app)).where(APIKey.is_active == True)
+        result = await self.db.execute(stmt)
+        keys = result.scalars().all()
+        
+        # Check each key's hash
+        key_bytes = api_key.encode('utf-8')
+        for key in keys:
+            if bcrypt.checkpw(key_bytes, key.key_hash.encode('utf-8')):
+                return key.app
+        
+        return None
+
+    @staticmethod
+    async def get_api_key(
+        api_key: str = Header(..., alias="X-API-Key"),
+        db: AsyncSession = Depends(get_db)
+    ) -> str:
+        """FastAPI dependency to get and validate API key"""
+        auth_service = AuthService(db)
+        app = await auth_service.verify_api_key(api_key)
+        if not app:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        return api_key
+
+    async def create_logs(self, app_id: int, logs: BridgeLogBatchCreate) -> List[BridgeLog]:
+        """Create multiple log entries for an app."""
+        db_logs = []
+        for log in logs.logs:
+            db_log = BridgeLog(
+                app_id=app_id,
+                timestamp=log.timestamp or datetime.utcnow(),
+                level=log.level,
+                message=log.message,
+                connection_id=log.connection_id,
+                log_metadata=log.log_metadata
+            )
+            self.db.add(db_log)
+            db_logs.append(db_log)
+        
+        await self.db.commit()
+        for log in db_logs:
+            await self.db.refresh(log)
+        return db_logs
+
+    async def get_logs(
+        self,
+        app_id: int,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        level: Optional[str] = None,
+        connection_id: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> tuple[List[BridgeLog], int]:
+        """Get logs for an app with filtering."""
+        # Build query conditions
+        conditions = [BridgeLog.app_id == app_id]
+        if start_time:
+            conditions.append(BridgeLog.timestamp >= start_time)
+        if end_time:
+            conditions.append(BridgeLog.timestamp <= end_time)
+        if level:
+            conditions.append(BridgeLog.level == level)
+        if connection_id:
+            conditions.append(BridgeLog.connection_id == connection_id)
+
+        # Get total count
+        count_query = select(BridgeLog).where(and_(*conditions))
+        total = len((await self.db.execute(count_query)).all())
+
+        # Get paginated results
+        query = select(BridgeLog).where(and_(*conditions)) \
+            .order_by(BridgeLog.timestamp.desc()) \
+            .offset(offset).limit(limit)
+        
+        result = await self.db.execute(query)
+        logs = result.scalars().all()
+        
+        return logs, total 
