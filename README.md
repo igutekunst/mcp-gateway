@@ -5,28 +5,28 @@ A Python-based gateway server implementing the Model Context Protocol (MCP) for 
 ## Development Roadmap
 
 ### Phase 1: Core Infrastructure (Current)
-- Basic FastAPI server setup with health check
-- API key and app management
-- Modern React/Vite admin interface
-- Connection monitoring and debugging UI
+- [x] Basic FastAPI server setup with health check
+- [x] API key and app management
+- [x] Modern React/Vite admin interface
+- [x] Connection monitoring and debugging UI
 
 ### Phase 2: MCP Implementation (Next)
-- Minimal MCP server implementation with JSON-RPC over stdio
-- Basic authentication with API keys
-- Proof of concept: Direct connection from Claude/Cursor using built-in tools
-- Debug/monitoring features in admin UI
+- [x] Minimal MCP server implementation with JSON-RPC over stdio
+- [x] Basic authentication with API keys
+- [x] Proof of concept: Direct connection from Claude/Cursor using built-in tools
+- [x] Debug/monitoring features in admin UI
 
 ### Phase 3: Tool Registration (Planned)
-- Tool registration API
-- MCP client implementation for tool discovery
-- Capability negotiation and routing
-- Extended admin interface for tool management
+- [ ] Tool registration API
+- [ ] MCP client implementation for tool discovery
+- [ ] Capability negotiation and routing
+- [ ] Extended admin interface for tool management
 
 ### Phase 4: Advanced Features (Future)
-- WebSocket/SSE support
-- Resource and prompt management
-- Sampling capabilities
-- Enhanced security and monitoring
+- [ ] WebSocket/SSE support
+- [ ] Resource and prompt management
+- [ ] Sampling capabilities
+- [ ] Enhanced security and monitoring
 
 ## Installation
 
@@ -181,3 +181,24 @@ This project implements the Model Context Protocol (MCP). For more information a
 ## License
 
 MIT License
+
+## Current Features
+
+### Core Infrastructure
+- FastAPI server with async support
+- Health check endpoints
+- API key and app management
+- React/Vite admin interface
+- Connection monitoring
+- XDG-compliant file storage
+- Alembic database migrations
+
+### API Endpoints
+- /api/auth/* - Authentication and key management
+- /api/bridge/* - MCP bridge functionality
+- /api/* - Health and system status
+
+### Database
+- Async SQLAlchemy with SQLite
+- Managed through Alembic migrations
+- XDG-compliant storage locations

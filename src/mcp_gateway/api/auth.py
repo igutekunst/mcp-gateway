@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List, Optional
 
-from ..models.base import get_db
+from ..models.auth import AppType
 from ..schemas.auth import (
     AppIDCreate,
     AppIDResponse,
@@ -10,8 +11,9 @@ from ..schemas.auth import (
     APIKeyWithSecret,
 )
 from ..services.auth import AuthService
+from ..models.base import get_db
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 @router.post("/apps", response_model=AppIDResponse)
 async def create_app(
@@ -23,13 +25,14 @@ async def create_app(
     db_app = await auth_service.create_app_id(app)
     return db_app
 
-@router.get("/apps", response_model=list[AppIDResponse])
+@router.get("/apps", response_model=List[AppIDResponse])
 async def list_apps(
-    db: AsyncSession = Depends(get_db),
+    type: Optional[AppType] = None,
+    db: AsyncSession = Depends(get_db)
 ):
-    """List all registered apps."""
+    """List all registered apps, optionally filtered by type."""
     auth_service = AuthService(db)
-    return await auth_service.list_apps()
+    return await auth_service.list_apps(type)
 
 @router.get("/apps/{app_id}", response_model=AppIDResponse)
 async def get_app(

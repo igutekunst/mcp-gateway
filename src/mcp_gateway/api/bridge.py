@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 import json
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 import uuid
 import logging
 import os
@@ -122,10 +122,8 @@ async def create_logs(
     """Create multiple log entries."""
     try:
         auth_service = AuthService(db)
+        # The API key is already validated by the dependency
         app = await auth_service.get_app_by_api_key(api_key)
-        if not app:
-            raise HTTPException(status_code=401, detail="Invalid API key")
-        
         created_logs = await auth_service.create_logs(app.id, logs)
         return created_logs
     except Exception as e:
@@ -135,12 +133,12 @@ async def create_logs(
 @router.get("/logs/{app_id}", response_model=BridgeLogList)
 async def get_logs(
     app_id: int,
+    level: Optional[str] = Query(None, pattern="^(DEBUG|INFO|WARNING|ERROR)$"),
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
-    level: Optional[str] = Query(None, regex="^(DEBUG|INFO|WARNING|ERROR)$"),
-    connection_id: Optional[str] = None,
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    limit: int = Query(default=100, le=1000),
+    offset: int = 0,
+    api_key: str = Depends(AuthService.get_api_key),
     db: AsyncSession = Depends(get_db)
 ):
     """Get logs for an app with filtering."""
@@ -151,7 +149,6 @@ async def get_logs(
             start_time=start_time,
             end_time=end_time,
             level=level,
-            connection_id=connection_id,
             limit=limit,
             offset=offset
         )

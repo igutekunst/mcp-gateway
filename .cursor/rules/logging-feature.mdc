@@ -1,0 +1,85 @@
+---
+description: Use this rule when working on adding logging.
+globs: 
+alwaysApply: false
+---
+# MCP Bridge Logging Implementation Plan
+
+## General Guidelines
+- Run unit test `pytest -v` when making changes and before suggesting commits
+- Commit and push after milestones (sections) are completed and tested
+- Output updated rules as we go along
+
+## 1. Database Schema (✓ Completed)
+- Created `BridgeLog` model in `models/auth.py` with fields:
+  - `id`: Primary key
+  - `app_id`: Foreign key to AppID
+  - `timestamp`: When the log was created
+  - `level`: Log level (DEBUG, INFO, WARNING, ERROR)
+  - `message`: Log message content
+  - `connection_id`: Bridge connection identifier
+  - `log_metadata`: JSON field for additional context
+- Added relationship to AppID model
+- Created and ran Alembic migration
+
+## 2. API Endpoints (✓ Completed)
+### Log Submission
+- Added `/api/bridge/logs` POST endpoint
+  - Authenticated with API key
+  - Accepts batch of logs
+  - Validates against app_id from API key
+  - Stores in database
+
+### Log Retrieval
+- Added `/api/bridge/logs/{app_id}` GET endpoint
+  - Query parameters:
+    - `start_time`: Filter logs after this time
+    - `end_time`: Filter logs before this time
+    - `level`: Filter by log level
+    - `connection_id`: Filter by connection
+    - `limit`: Max number of logs to return
+    - `offset`: Pagination offset
+
+## 3. Logger Implementation (✓ Completed)
+### BridgeLogger Class
+- Created class in `core/logging.py` with:
+  - Local file logging
+  - API submission with batching
+  - Buffer logs in memory
+  - Periodic flush to API
+  - Handle connection failures
+  - Reconnection logic
+  - Convenience methods (debug, info, warning, error)
+  - Test client support for testing
+
+### Integration Points
+- Updated `MCPBridge` class to use new logger:
+  - Initialize logger in constructor
+  - Add logging to key methods
+  - Include metadata
+- Added comprehensive test suite in `tests/test_logging.py`
+
+## 4. Frontend Integration (Next Step)
+### Log Viewer Component
+- Create reusable component for both ToolProviders and Agents
+- Features:
+  - Real-time updates
+  - Level-based highlighting
+  - Time-based filtering
+  - Search/filter functionality
+  - Expandable entries for metadata
+  - Connection session grouping
+
+### UI Integration
+- Add to existing views:
+  - `ToolProviders.tsx`
+  - `Agents.tsx`
+- Show logs specific to selected app
+- Add filtering controls
+- Style consistently with existing UI
+
+## Implementation Order
+1. ✓ Database schema and migration
+2. ✓ API endpoints and services
+3. ✓ Logger implementation
+4. Frontend integration (In Progress)

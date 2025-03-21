@@ -1,0 +1,15 @@
+2025-03-20 19:55:18,483 - INFO - Created new MCPBridge {"app_id": 1, "connection_id": "bridge-1-20250321025518"}
+2025-03-20 19:55:18,483 - DEBUG - Sending response {"request_id": "connection", "response_type": "success"}
+2025-03-20 19:55:18,484 - DEBUG - Received message {"request_id": "1", "method": "initialize", "has_params": false}
+2025-03-20 19:55:18,484 - INFO - Handling initialize request {"request_id": "1"}
+2025-03-20 19:55:18,484 - INFO - Initializing bridge {"request_id": "1"}
+2025-03-20 19:55:18,484 - DEBUG - Sending response {"request_id": "1", "response_type": "success"}
+2025-03-20 19:55:18,485 - DEBUG - Received message {"request_id": "2", "method": "invalid_method", "has_params": false}
+2025-03-20 19:55:18,485 - ERROR - Invalid method format {"request_id": "2", "method": "invalid_method"}
+2025-03-20 19:55:18,485 - DEBUG - Sending error response {"request_id": "2", "error_code": -32601, "error_message": "Method 'invalid_method' not found"}
+2025-03-20 19:55:18,485 - DEBUG - Received message {"request_id": "3", "method": "initialize", "has_params": true}
+2025-03-20 19:55:18,485 - INFO - Handling initialize request {"request_id": "3"}
+2025-03-20 19:55:18,485 - WARNING - Initialize request contained params {"request_id": "3", "params": {"invalid": "params"}}
+2025-03-20 19:55:18,485 - DEBUG - Sending error response {"request_id": "3", "error_code": -32602, "error_message": "Invalid params: initialize request does not accept parameters"}
+2025-03-20 19:55:18,486 - ERROR - Failed to parse message {"error": "2 validation errors for MCPRequest\nmethod\n  Field required [type=missing, input_value={'invalid': 'request'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.10/v/missing\nid\n  Field required [type=missing, input_value={'invalid': 'request'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.10/v/missing", "raw_message": {"invalid": "request"}}
+2025-03-20 19:55:18,486 - DEBUG - Sending error response {"request_id": "", "error_code": -32600, "error_message": "Invalid Request"}

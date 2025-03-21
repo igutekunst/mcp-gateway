@@ -16,19 +16,19 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Configure CORS for frontend
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite's default port
+    allow_origins=["*"],  # Allow all origins in development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include API routers
-app.include_router(auth_router, prefix="/api")
+app.include_router(auth_router, prefix="/api/auth")
 app.include_router(health_router, prefix="/api")
-app.include_router(bridge_router, prefix="/api")
+app.include_router(bridge_router, prefix="/api/bridge")
 
 # Mount static files
 static_dir = Path(__file__).parent / "static"

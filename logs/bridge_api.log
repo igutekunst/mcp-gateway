@@ -1,0 +1,25 @@
+2025-03-20 19:50:02,132 - mcp_gateway.api.bridge - INFO - New WebSocket connection attempt
+2025-03-20 19:50:02,133 - mcp_gateway.api.bridge - INFO - Generated connection_id: bridge-1-20250321025002
+2025-03-20 19:50:02,133 - mcp_gateway.api.bridge - INFO - Sending connection established message
+2025-03-20 19:50:02,133 - mcp_gateway.api.bridge - DEBUG - Received WebSocket message: {'jsonrpc': '2.0', 'method': 'initialize', 'id': '1'}
+2025-03-20 19:50:02,134 - mcp_gateway.api.bridge - DEBUG - Received WebSocket message: {'jsonrpc': '2.0', 'method': 'invalid_method', 'id': '2'}
+2025-03-20 19:50:02,135 - mcp_gateway.api.bridge - DEBUG - Received WebSocket message: {'jsonrpc': '2.0', 'method': 'initialize', 'params': {'invalid': 'params'}, 'id': '3'}
+2025-03-20 19:50:02,135 - mcp_gateway.api.bridge - DEBUG - Received WebSocket message: {'invalid': 'request'}
+2025-03-20 19:50:02,135 - mcp_gateway.api.bridge - INFO - WebSocket disconnected for connection bridge-1-20250321025002
+2025-03-20 19:55:18,245 - mcp_gateway.api.bridge - INFO - New WebSocket connection attempt
+2025-03-20 19:55:18,482 - mcp_gateway.api.bridge - INFO - Generated connection_id: bridge-1-20250321025518
+2025-03-20 19:55:18,483 - mcp_gateway.api.bridge - INFO - Sending connection established message
+2025-03-20 19:55:18,484 - mcp_gateway.api.bridge - DEBUG - Received WebSocket message: {'jsonrpc': '2.0', 'method': 'initialize', 'id': '1'}
+2025-03-20 19:55:18,484 - mcp_gateway.api.bridge - DEBUG - Received WebSocket message: {'jsonrpc': '2.0', 'method': 'invalid_method', 'id': '2'}
+2025-03-20 19:55:18,485 - mcp_gateway.api.bridge - DEBUG - Received WebSocket message: {'jsonrpc': '2.0', 'method': 'initialize', 'params': {'invalid': 'params'}, 'id': '3'}
+2025-03-20 19:55:18,485 - mcp_gateway.api.bridge - DEBUG - Received WebSocket message: {'invalid': 'request'}
+2025-03-20 19:55:18,486 - mcp_gateway.api.bridge - INFO - WebSocket disconnected for connection bridge-1-20250321025518
+2025-03-20 20:02:46,201 - mcp_gateway.api.bridge - ERROR - Error creating logs: 'AuthService' object has no attribute '_get_api_key_by_key'
+2025-03-20 20:02:46,736 - mcp_gateway.api.bridge - ERROR - Error creating logs: 'AuthService' object has no attribute '_get_api_key_by_key'
+2025-03-20 20:02:47,996 - mcp_gateway.api.bridge - ERROR - Error creating logs: 'AuthService' object has no attribute '_get_api_key_by_key'
+2025-03-20 20:03:17,011 - mcp_gateway.api.bridge - ERROR - Error creating logs: 401: Invalid API key
+2025-03-20 20:03:17,781 - mcp_gateway.api.bridge - ERROR - Error creating logs: 401: Invalid API key
+2025-03-20 20:03:19,271 - mcp_gateway.api.bridge - ERROR - Error creating logs: 401: Invalid API key
+2025-03-20 20:05:31,625 - mcp_gateway.api.bridge - ERROR - Error creating logs: 'NoneType' object has no attribute 'id'
+2025-03-20 20:05:32,400 - mcp_gateway.api.bridge - ERROR - Error creating logs: 'NoneType' object has no attribute 'id'
+2025-03-20 20:05:33,884 - mcp_gateway.api.bridge - ERROR - Error creating logs: 'NoneType' object has no attribute 'id'

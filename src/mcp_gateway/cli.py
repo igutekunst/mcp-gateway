@@ -1,16 +1,19 @@
 import typer
 from rich.console import Console
 from rich.table import Table
+import time
 import uvicorn
 import asyncio
 import json
 import subprocess
-import os
-import sys
 import websockets
+import threading
+import logging
+import httpx
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
+import os
 
 from .main import app
 from .models.base import AsyncSessionLocal
@@ -29,6 +32,15 @@ def dev(
     """Run the MCP Admin server in development mode with hot-reloading frontend."""
     # Start frontend dev server
     frontend_dir = Path(__file__).parent.parent.parent / "frontend"
+    
+    # Set up environment variables for the frontend process
+    env = {
+        **os.environ,
+        'VITE_API_URL': f'http://{host}:{port}',
+        'VITE_DEV_SERVER_PORT': '5173',
+    }
+    
+    # Start frontend dev server with proper environment
     frontend_process = subprocess.Popen(
         ["npm", "run", "dev"],
         cwd=frontend_dir,
@@ -36,17 +48,35 @@ def dev(
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-        universal_newlines=True
+        universal_newlines=True,
+        env=env,
+        shell=True if os.name == 'nt' else False,  # Use shell on Windows
     )
     
     # Print frontend output in a separate thread
-    def print_output():
-        for line in frontend_process.stdout:
-            console.print(f"[blue]Frontend:[/blue] {line}", end="")
+    def print_frontend_output():
+        try:
+            while True:
+                line = frontend_process.stdout.readline()
+                if not line and frontend_process.poll() is not None:
+                    break
+                if line:
+                    console.print(f"[blue]Frontend:[/blue] {line}", end="")
+        except Exception as e:
+            console.print(f"[red]Frontend output error:[/red] {str(e)}")
     
-    import threading
-    output_thread = threading.Thread(target=print_output, daemon=True)
-    output_thread.start()
+    # Create and start frontend output thread
+    frontend_thread = threading.Thread(target=print_frontend_output, daemon=True)
+    frontend_thread.start()
+
+    # Create a custom uvicorn logger that prefixes output
+    class PrefixedHandler(logging.StreamHandler):
+        def emit(self, record):
+            msg = self.format(record)
+            console.print(f"[green]Backend:[/green] {msg}")
+
+    # Configure uvicorn logging
+    logging.getLogger("uvicorn").handlers = [PrefixedHandler()]
     
     try:
         # Run backend with reload enabled using import string
@@ -55,15 +85,20 @@ def dev(
             host=host,
             port=port,
             reload=True,
-            reload_dirs=[str(Path(__file__).parent)]
+            reload_dirs=[str(Path(__file__).parent)],
+            log_config=None  # Disable default uvicorn logging config
         )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Shutting down servers...[/yellow]")
     finally:
         # Cleanup frontend process
-        frontend_process.terminate()
-        try:
-            frontend_process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            frontend_process.kill()
+        if frontend_process.poll() is None:  # Only if process is still running
+            frontend_process.terminate()
+            try:
+                frontend_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                frontend_process.kill()
+                frontend_process.wait()
 
 @cli.command()
 def serve(
@@ -91,7 +126,7 @@ def create_app(
             return app
 
     app = asyncio.run(_create_app())
-    console.print(f"Created [green]{app.type.value}[/green] app [blue]{app.name}[/blue] with ID: [yellow]{app.app_id}[/yellow]")
+    console.print(f"Created [green]{app.type}[/green] app [blue]{app.name}[/blue] with ID: [yellow]{app.app_id}[/yellow]")
 
 @cli.command()
 def create_key(
@@ -135,7 +170,7 @@ def list_apps():
             str(app.id),
             app.app_id,
             app.name,
-            app.type.value if app.type else "unknown",
+            app.type,
             app.description or "",
             "Active" if app.is_active else "Inactive"
         )
@@ -180,39 +215,75 @@ def bridge(
     Connect to MCP server as a bridge client.
     This allows the CLI to act as a bridge between local commands and the MCP server.
     """
+    async def send_heartbeat(api_key: str, host: str, port: int):
+        """Send periodic heartbeats to the server."""
+        url = f"http://{host}:{port}/api/bridge/heartbeat"
+        headers = {
+            "X-API-Key": api_key,
+            "Content-Type": "application/json"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            while True:
+                try:
+                    resp = await client.post(url, headers=headers, json={"status": "alive"})
+                    if resp.status_code == 401:
+                        return
+                    elif resp.status_code == 405:
+                        return
+                    elif resp.status_code != 200:
+                        pass
+                except httpx.ConnectError:
+                    pass
+                except Exception:
+                    pass
+                await asyncio.sleep(5)  # Send heartbeat every 5 seconds
+
     async def run_bridge():
+        # Start heartbeat task first
+        heartbeat_task = asyncio.create_task(send_heartbeat(api_key, host, port))
+        
         # Initial connection to get WebSocket URL
         url = f"ws://{host}:{port}/api/bridge/connect"
         headers = {"X-API-Key": api_key}
         
         try:
-            async with websockets.connect(url, additional_headers=headers) as websocket:
-                console.print("[green]Connected to MCP server[/green]")
-                console.print("Listening for commands... Press Ctrl+C to exit")
-                
+            while True:  # Reconnection loop
                 try:
-                    while True:
-                        message = await websocket.recv()
+                    async with websockets.connect(url, additional_headers=headers) as websocket:
                         try:
-                            command = json.loads(message)
-                            console.print(f"[blue]Received command:[/blue] {command}")
-                            # TODO: Execute command and send response
-                            response = {"status": "success", "result": "Command received"}
-                            await websocket.send(json.dumps(response))
-                        except json.JSONDecodeError:
-                            console.print(f"[yellow]Received invalid JSON message:[/yellow] {message}")
+                            while True:
+                                message = await websocket.recv()
+                                try:
+                                    command = json.loads(message)
+                                    # Process command...
+                                except json.JSONDecodeError:
+                                    pass
+                        except websockets.exceptions.ConnectionClosed as e:
+                            if e.code == 4001:
+                                heartbeat_task.cancel()  # Stop heartbeat on auth failure
+                                return
+                            else:
+                                await asyncio.sleep(5)  # Wait before reconnecting
+                except websockets.exceptions.InvalidStatusCode as e:
+                    if e.status_code == 403:
+                        heartbeat_task.cancel()  # Stop heartbeat on auth failure
+                        return
+                    else:
+                        return
                 except websockets.exceptions.ConnectionClosed:
-                    console.print("[red]WebSocket connection closed[/red]")
-                except KeyboardInterrupt:
-                    console.print("\n[yellow]Bridge connection terminated by user[/yellow]")
-        
-        except websockets.exceptions.WebSocketException as e:
-            console.print(f"[red]Failed to connect to MCP server:[/red] {str(e)}")
+                    await asyncio.sleep(5)  # Wait before reconnecting
+                except Exception:
+                    await asyncio.sleep(5)  # Wait before reconnecting
+        except KeyboardInterrupt:
+            heartbeat_task.cancel()
+        except Exception:
+            heartbeat_task.cancel()
 
     try:
         asyncio.run(run_bridge())
     except KeyboardInterrupt:
-        console.print("\n[yellow]Bridge terminated[/yellow]")
+        pass
 
 if __name__ == "__main__":
     cli() 

@@ -1,8 +1,9 @@
-import { Box, Heading, Table, Thead, Tbody, Tr, Th, Td, Button, Badge, HStack, Text, Tooltip, Circle } from '@chakra-ui/react';
+import { Box, Heading, Table, Thead, Tbody, Tr, Th, Td, Button, Badge, HStack, Text, Tooltip, Circle, Tabs, TabList, TabPanels, TabPanel, Tab } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { listApps, listApiKeys, type App, type ApiKey } from '../api/auth';
 import { useState, useEffect } from 'react';
+import { LogViewer } from '../components/LogViewer';
 
 interface ToolProviderWithKey extends App {
   apiKey?: ApiKey;
@@ -86,6 +87,8 @@ export function ToolProviders() {
     refetchInterval: 1000, // Refresh API data every second
   });
 
+  const [selectedProvider, setSelectedProvider] = useState<ToolProviderWithKey | null>(null);
+
   if (isLoading) {
     return <Text>Loading...</Text>;
   }
@@ -101,53 +104,75 @@ export function ToolProviders() {
         <Button colorScheme="blue">Register New Provider</Button>
       </HStack>
 
-      <Table variant="simple">
-        <Thead>
-          <Tr>
-            <Th>Name</Th>
-            <Th>Description</Th>
-            <Th>Status</Th>
-            <Th>Created</Th>
-            <Th>Last Connected</Th>
-            <Th>API Key</Th>
-            <Th>Actions</Th>
-          </Tr>
-        </Thead>
-        <Tbody>
-          {providers?.map((provider) => (
-            <Tr key={provider.id}>
-              <Td>{provider.name}</Td>
-              <Td>{provider.description || '-'}</Td>
-              <Td>
-                <Badge
-                  colorScheme={provider.is_active ? 'green' : 'gray'}
-                >
-                  {provider.is_active ? 'Active' : 'Inactive'}
-                </Badge>
-              </Td>
-              <Td>{format(parseISO(provider.created_at), 'MMM d, yyyy')}</Td>
-              <Td>
-                <LastConnectedCell lastConnected={provider.last_connected} />
-              </Td>
-              <Td>
-                {provider.apiKey ? (
-                  <Badge colorScheme="green">Active</Badge>
-                ) : (
-                  <Badge colorScheme="yellow">No Key</Badge>
-                )}
-              </Td>
-              <Td>
-                <HStack spacing={2}>
-                  <Button size="sm">Edit</Button>
-                  <Button size="sm" colorScheme="red" variant="ghost">
-                    Delete
-                  </Button>
-                </HStack>
-              </Td>
-            </Tr>
-          ))}
-        </Tbody>
-      </Table>
+      <Tabs>
+        <TabList>
+          <Tab>Overview</Tab>
+          {selectedProvider && (
+            <Tab>Logs: {selectedProvider.name}</Tab>
+          )}
+        </TabList>
+
+        <TabPanels>
+          <TabPanel px={0}>
+            <Table variant="simple">
+              <Thead>
+                <Tr>
+                  <Th>Name</Th>
+                  <Th>Description</Th>
+                  <Th>Status</Th>
+                  <Th>Created</Th>
+                  <Th>Last Connected</Th>
+                  <Th>API Key</Th>
+                  <Th>Actions</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {providers?.map((provider) => (
+                  <Tr key={provider.id} onClick={() => setSelectedProvider(provider)} cursor="pointer" _hover={{ bg: 'gray.50' }}>
+                    <Td>{provider.name}</Td>
+                    <Td>{provider.description || '-'}</Td>
+                    <Td>
+                      <Badge
+                        colorScheme={provider.is_active ? 'green' : 'gray'}
+                      >
+                        {provider.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </Td>
+                    <Td>{format(parseISO(provider.created_at), 'MMM d, yyyy')}</Td>
+                    <Td>
+                      <LastConnectedCell lastConnected={provider.last_connected} />
+                    </Td>
+                    <Td>
+                      {provider.apiKey ? (
+                        <Badge colorScheme="green">Active</Badge>
+                      ) : (
+                        <Badge colorScheme="yellow">No Key</Badge>
+                      )}
+                    </Td>
+                    <Td>
+                      <HStack spacing={2}>
+                        <Button size="sm">Edit</Button>
+                        <Button size="sm" colorScheme="red" variant="ghost">
+                          Delete
+                        </Button>
+                      </HStack>
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </TabPanel>
+
+          {selectedProvider && (
+            <TabPanel px={0}>
+              <LogViewer 
+                appId={selectedProvider.id} 
+                refreshInterval={5000}
+              />
+            </TabPanel>
+          )}
+        </TabPanels>
+      </Tabs>
     </Box>
   );
 } 
