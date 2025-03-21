@@ -1,5 +1,16 @@
 ---
-description: 
+description: When making large changes, new features, or substantial changes
 globs: 
 alwaysApply: false
 ---
+For large changes:
+- See README.md
+- first examine full codebase for context
+- Suggest updating README if it doesn't match codebase.
+- Suggest possible large changes
+- Assess if architecture and best practices are being followd. If not, ask if I'd like to make changes.
+- Break changes into sections. Ask me for confirmation before doing anything.
+- Document changes in a file docs/dev-journal/good-name-for-change.md in detail with multiple steps
+- Do one step at a time, and run any relevant unit tests. Ask me if it looks good, then update readme, commit and push
+
+

@@ -6,4 +6,4 @@ alwaysApply: true
 - Always use pyproject.tom
 - If changing large sections, using new libraries, or refactoring, don't do so without asking first.
    In general assume that code is architecturally okay. If it doesn't, ask. 
-- for large changes, see [large-changes.mdc](mdc:.cursor/rules/large-changes.mdc). In general, large changes require more t
+- for large changes, see [large-changes.mdc](mdc:.cursor/rules/large-changes.mdc). In general, large changes require more thought.
