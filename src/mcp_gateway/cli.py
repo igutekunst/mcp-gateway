@@ -20,6 +20,7 @@ from .models.base import AsyncSessionLocal
 from .services.auth import AuthService
 from .schemas.auth import AppIDCreate, APIKeyCreate
 from .models.auth import AppType
+from .settings import initialize_admin_password, settings
 
 cli = typer.Typer()
 console = Console()
@@ -284,6 +285,43 @@ def bridge(
         asyncio.run(run_bridge())
     except KeyboardInterrupt:
         pass
+
+@cli.command()
+def set_admin_password(
+    password: str = typer.Option(
+        ...,
+        prompt=True,
+        confirmation_prompt=True,
+        hide_input=True,
+        help="Set the admin password for the web interface"
+    )
+):
+    """Set the admin password for the web interface."""
+    try:
+        initialize_admin_password(password)
+        # Save to environment file
+        env_file = Path(".env")
+        env_contents = []
+        
+        # Read existing contents
+        if env_file.exists():
+            with open(env_file) as f:
+                env_contents = [
+                    line for line in f.readlines()
+                    if not line.startswith("MCP_ADMIN_PASSWORD_HASH=")
+                ]
+        
+        # Add new password hash
+        env_contents.append(f"MCP_ADMIN_PASSWORD_HASH={settings.ADMIN_PASSWORD_HASH}\n")
+        
+        # Write back
+        with open(env_file, "w") as f:
+            f.writelines(env_contents)
+            
+        typer.echo("Admin password set successfully!")
+    except Exception as e:
+        typer.echo(f"Error setting admin password: {str(e)}", err=True)
+        raise typer.Exit(1)
 
 if __name__ == "__main__":
     cli() 

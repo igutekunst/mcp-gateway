@@ -40,26 +40,50 @@ alwaysApply: false
     - `limit`: Max number of logs to return
     - `offset`: Pagination offset
 
-## 3. Logger Implementation (✓ Completed)
+## 3. Logger Implementation (In Progress)
 ### BridgeLogger Class
-- Created class in `core/logging.py` with:
-  - Local file logging
+- Create new class in `core/logging.py`:
+  ```python
+  class BridgeLogger:
+      def __init__(self, app_id: str, connection_id: str, api_key: str):
+          self.app_id = app_id
+          self.connection_id = connection_id
+          self.api_key = api_key
+          self.buffer = []
+          self.buffer_size = 100
+          self.flush_interval = 5.0  # seconds
+  ```
+- Features:
+  - Local file logging (existing)
   - API submission with batching
   - Buffer logs in memory
   - Periodic flush to API
   - Handle connection failures
   - Reconnection logic
-  - Convenience methods (debug, info, warning, error)
-  - Test client support for testing
 
 ### Integration Points
-- Updated `MCPBridge` class to use new logger:
+- Update `MCPBridge` class to use new logger:
   - Initialize logger in constructor
-  - Add logging to key methods
-  - Include metadata
-- Added comprehensive test suite in `tests/test_logging.py`
+  - Add logging to key methods:
+    - `handle_message`
+    - `_handle_initialize`
+    - `_handle_method_call`
+    - `_send_response`
+    - `_send_error`
+  - Include metadata:
+    - Request/response IDs
+    - Method names
+    - Error codes
+    - Request parameters (sanitized)
 
-## 4. Frontend Integration (Next Step)
+### Error Handling
+- Handle API submission failures:
+  - Retry with exponential backoff
+  - Fall back to file logging if API unreachable
+  - Buffer overflow protection
+  - Graceful shutdown with flush
+
+## 4. Frontend Integration (Pending)
 ### Log Viewer Component
 - Create reusable component for both ToolProviders and Agents
 - Features:
@@ -81,5 +105,8 @@ alwaysApply: false
 ## Implementation Order
 1. ✓ Database schema and migration
 2. ✓ API endpoints and services
-3. ✓ Logger implementation
-4. Frontend integration (In Progress)
+3. Logger implementation (In Progress)
+   - Create BridgeLogger class
+   - Add batching and API submission
+   - Integrate with MCPBridge
+4. Frontend integration
