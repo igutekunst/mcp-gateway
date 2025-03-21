@@ -4,8 +4,23 @@ import json
 from fastapi import WebSocket
 from datetime import datetime
 import logging
+import os
+from .logging import BridgeLogger
 
+# Configure logging to only write to file
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())  # Prevent output to stdout
+logger.setLevel(logging.DEBUG)
+
+# Create logs directory if it doesn't exist
+os.makedirs("logs", exist_ok=True)
+
+# Add file handler for bridge logs
+file_handler = logging.FileHandler("logs/bridge.log")
+file_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 class MCPRequest(BaseModel):
     jsonrpc: str = "2.0"
@@ -28,22 +43,40 @@ class MCPResponse(BaseModel):
         return data
 
 class MCPBridge:
-    def __init__(self, websocket: WebSocket, connection_id: str):
+    def __init__(self, websocket: WebSocket, connection_id: str, app_id: int, api_key: str):
         self.websocket = websocket
         self.connection_id = connection_id
+        self.app_id = app_id
         self.initialized = False
         self.client_capabilities = {}
         self.last_heartbeat = datetime.utcnow()
-        logger.info(f"Created new MCPBridge with connection_id: {connection_id}")
+        
+        # Initialize logger
+        self.logger = BridgeLogger(
+            app_id=app_id,
+            connection_id=connection_id,
+            api_key=api_key
+        )
+        self.logger.start()
+        self.logger.info("Created new MCPBridge", {
+            "app_id": app_id,
+            "connection_id": connection_id
+        })
         
     async def handle_message(self, message: dict) -> None:
         """Handle incoming MCP message"""
-        logger.info(f"Received message: {message}")
         try:
             request = MCPRequest(**message)
-            logger.debug(f"Parsed request: {request}")
+            self.logger.debug("Received message", {
+                "request_id": request.id,
+                "method": request.method,
+                "has_params": request.params is not None
+            })
         except Exception as e:
-            logger.error(f"Failed to parse message: {e}")
+            self.logger.error("Failed to parse message", {
+                "error": str(e),
+                "raw_message": message
+            })
             await self._send_error(
                 request_id="",
                 code=-32600,
@@ -52,10 +85,15 @@ class MCPBridge:
             return
 
         if request.method == "initialize":
-            logger.info(f"Handling initialize request with id: {request.id}")
+            self.logger.info("Handling initialize request", {
+                "request_id": request.id
+            })
             await self._handle_initialize(request)
         elif not self.initialized:
-            logger.warning(f"Received request {request.method} before initialization")
+            self.logger.warning("Received request before initialization", {
+                "request_id": request.id,
+                "method": request.method
+            })
             await self._send_error(-32002, "Server not initialized", request.id)
         else:
             await self._handle_method_call(request)
@@ -64,16 +102,23 @@ class MCPBridge:
         """Handle initialize request"""
         # Initialize request should not have any parameters
         if request.params:
-            logger.warning(f"Initialize request contained params: {request.params}")
+            self.logger.warning("Initialize request contained params", {
+                "request_id": request.id,
+                "params": request.params
+            })
             await self._send_error(-32602, "Invalid params: initialize request does not accept parameters", request.id)
             return
 
         if self.initialized:
-            logger.warning(f"Received initialize request when already initialized")
+            self.logger.warning("Received initialize request when already initialized", {
+                "request_id": request.id
+            })
             await self._send_error(-32002, "Server already initialized", request.id)
             return
 
-        logger.info(f"Initializing bridge with request id: {request.id}")
+        self.logger.info("Initializing bridge", {
+            "request_id": request.id
+        })
         self.client_capabilities = {}
         self.initialized = True
         
@@ -91,13 +136,16 @@ class MCPBridge:
             },
             "tools": ToolRegistry.get_capabilities()
         }
-        logger.debug(f"Sending capabilities response with id: {request.id}")
         await self._send_response(capabilities_response, request.id)
 
     async def _handle_method_call(self, request: MCPRequest) -> None:
         """Handle tool method calls"""
         try:
             if "." not in request.method:
+                self.logger.error("Invalid method format", {
+                    "request_id": request.id,
+                    "method": request.method
+                })
                 await self._send_error(-32601, f"Method '{request.method}' not found", request.id)
                 return
                 
@@ -107,30 +155,51 @@ class MCPBridge:
             tool = ToolRegistry.get_tool(tool_name)
             
             if not tool:
+                self.logger.error("Tool not found", {
+                    "request_id": request.id,
+                    "tool_name": tool_name
+                })
                 await self._send_error(-32601, f"Tool '{tool_name}' not found", request.id)
                 return
                 
             if method_name not in tool.methods:
+                self.logger.error("Method not found", {
+                    "request_id": request.id,
+                    "tool_name": tool_name,
+                    "method_name": method_name
+                })
                 await self._send_error(-32601, f"Method '{method_name}' not found", request.id)
                 return
 
+            self.logger.info("Executing method", {
+                "request_id": request.id,
+                "tool_name": tool_name,
+                "method_name": method_name,
+                "has_params": request.params is not None
+            })
             result = await tool.methods[method_name].handler(tool, **(request.params or {}))
             await self._send_response(result, request.id)
             
         except Exception as e:
+            self.logger.error("Error handling method call", {
+                "request_id": request.id,
+                "error": str(e)
+            })
             await self._send_error(-32000, str(e), request.id)
 
     async def _send_response(self, result: Dict[str, Any], request_id: Optional[str] = None) -> None:
         """Send a JSON-RPC response"""
-        logger.info(f"Preparing response for request_id: {request_id}")
         if request_id is None:
-            logger.warning("request_id is None, using empty string")
+            self.logger.warning("request_id is None, using empty string")
         response = MCPResponse(
             result=result,
-            id=request_id or ""  # Convert None to empty string at creation time
+            id=request_id or ""
         )
         response_data = response.model_dump()
-        logger.debug(f"Sending response: {response_data}")
+        self.logger.debug("Sending response", {
+            "request_id": request_id,
+            "response_type": "success"
+        })
         await self.websocket.send_json(response_data)
 
     async def _send_error(self, code: int, message: str, request_id: Optional[str] = None) -> None:
@@ -140,10 +209,21 @@ class MCPBridge:
                 "code": code,
                 "message": message
             },
-            id=request_id or ""  # Convert None to empty string at creation time
+            id=request_id or ""
         )
+        self.logger.debug("Sending error response", {
+            "request_id": request_id,
+            "error_code": code,
+            "error_message": message
+        })
         await self.websocket.send_json(response.model_dump())
 
     def update_heartbeat(self) -> None:
         """Update the last heartbeat time"""
-        self.last_heartbeat = datetime.utcnow() 
+        self.last_heartbeat = datetime.utcnow()
+        self.logger.debug("Updated heartbeat")
+
+    async def cleanup(self) -> None:
+        """Clean up resources when bridge is disconnected"""
+        await self.logger.stop()
+        self.logger.info("Bridge disconnected") 

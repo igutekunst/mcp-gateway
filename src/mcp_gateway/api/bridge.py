@@ -66,14 +66,22 @@ async def handle_websocket(
 ):
     """Handle WebSocket connection for bridge"""
     connection_id = None
+    bridge = None
     try:
         logger.info("New WebSocket connection attempt")
         await websocket.accept()
         
+        # Get app from API key
+        auth_service = AuthService(db)
+        app = await auth_service.get_app_by_api_key(api_key)
+        if not app:
+            await websocket.close(code=4001, reason="Invalid API key")
+            return
+        
         connection_id = f"bridge-{len(bridge_connections) + 1}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         logger.info(f"Generated connection_id: {connection_id}")
         
-        bridge = MCPBridge(websocket, connection_id)
+        bridge = MCPBridge(websocket, connection_id, app.id, api_key)
         bridge_connections[connection_id] = bridge
         
         # Use bridge's response method consistently
@@ -97,10 +105,11 @@ async def handle_websocket(
                 continue
     except WebSocketDisconnect:
         logger.info(f"Bridge {connection_id} disconnected")
-        if connection_id in bridge_connections:
-            del bridge_connections[connection_id]
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
+    finally:
+        if bridge:
+            await bridge.cleanup()
         if connection_id and connection_id in bridge_connections:
             del bridge_connections[connection_id]
 
