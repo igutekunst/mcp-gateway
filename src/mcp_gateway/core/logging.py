@@ -1,10 +1,11 @@
 import asyncio
 import logging
 import httpx
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import List, Dict, Any, Optional
 import json
 from ..schemas.auth import BridgeLogCreate, BridgeLogBatchCreate
+from fastapi.testclient import TestClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,8 @@ class BridgeLogger:
         api_url: str = "http://localhost:8000",
         buffer_size: int = 100,
         flush_interval: float = 5.0,
-        max_retries: int = 3
+        max_retries: int = 3,
+        test_client: Optional[TestClient] = None
     ):
         self.app_id = app_id
         self.connection_id = connection_id
@@ -30,6 +32,7 @@ class BridgeLogger:
         self.flush_interval = flush_interval
         self.max_retries = max_retries
         self.flush_task: Optional[asyncio.Task] = None
+        self.test_client = test_client
         self._setup_file_logging()
         
     def _setup_file_logging(self):
@@ -68,7 +71,7 @@ class BridgeLogger:
             level=level.upper(),
             message=message,
             connection_id=self.connection_id,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             log_metadata=metadata
         )
         
@@ -91,21 +94,43 @@ class BridgeLogger:
         self.buffer.clear()
         
         batch = BridgeLogBatchCreate(logs=logs_to_send)
+        batch_json = json.loads(batch.model_dump_json())
         
         for attempt in range(self.max_retries):
             try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        f"{self.api_url}/api/bridge/logs",
+                if self.api_url.startswith("http://test"):
+                    # Use test client for test URLs
+                    response = self.test_client.post(
+                        "/api/bridge/logs",
                         headers={
                             "X-API-Key": self.api_key,
                             "Content-Type": "application/json"
                         },
-                        json=batch.model_dump(),
-                        timeout=10.0
+                        json=batch_json
                     )
-                    response.raise_for_status()
-                    return
+                    if response.status_code >= 400:
+                        raise httpx.HTTPStatusError(
+                            f"HTTP Error {response.status_code}",
+                            request=None,
+                            response=response
+                        )
+                    # Ensure we got a successful response
+                    if not response.json():
+                        raise Exception("No response data received")
+                else:
+                    # Use httpx for real URLs
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(
+                            f"{self.api_url}/api/bridge/logs",
+                            headers={
+                                "X-API-Key": self.api_key,
+                                "Content-Type": "application/json"
+                            },
+                            json=batch_json,
+                            timeout=10.0
+                        )
+                        response.raise_for_status()
+                return
             except Exception as e:
                 logger.error(f"Failed to send logs (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
                 if attempt == self.max_retries - 1:

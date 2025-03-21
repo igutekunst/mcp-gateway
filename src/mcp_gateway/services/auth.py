@@ -1,6 +1,6 @@
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -51,7 +51,7 @@ class AuthService:
         """Update the last_connected timestamp for an app."""
         app = await self.db.get(AppID, app_id)
         if app:
-            app.last_connected = datetime.utcnow()
+            app.last_connected = datetime.now(UTC)
             await self.db.commit()
 
     async def verify_api_key(self, api_key: str) -> AppID | None:
@@ -66,7 +66,7 @@ class AuthService:
         for key in keys:
             if bcrypt.checkpw(key_bytes, key.key_hash.encode('utf-8')):
                 # Update last used timestamp
-                key.last_used_at = datetime.utcnow()
+                key.last_used_at = datetime.now(UTC)
                 await self.db.commit()
                 return key.app
         
@@ -94,10 +94,10 @@ class AuthService:
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
-    async def get_app_by_api_key(self, api_key: str) -> Optional[AppID]:
-        """Get app by API key"""
+    async def _get_api_key_by_key(self, api_key: str) -> Optional[APIKey]:
+        """Get API key by raw key value."""
         # Find all active API keys
-        stmt = select(APIKey).options(selectinload(APIKey.app)).where(APIKey.is_active == True)
+        stmt = select(APIKey).where(APIKey.is_active == True)
         result = await self.db.execute(stmt)
         keys = result.scalars().all()
         
@@ -105,8 +105,20 @@ class AuthService:
         key_bytes = api_key.encode('utf-8')
         for key in keys:
             if bcrypt.checkpw(key_bytes, key.key_hash.encode('utf-8')):
-                return key.app
+                return key
         
+        return None
+
+    async def get_app_by_api_key(self, api_key: str) -> Optional[AppID]:
+        """Get application by API key."""
+        key = await self._get_api_key_by_key(api_key)
+        if key and key.is_active:
+            key.last_used_at = datetime.now(UTC)
+            await self.db.commit()
+            # Get app directly from the database using the numeric ID
+            stmt = select(AppID).where(AppID.id == key.app_id)
+            result = await self.db.execute(stmt)
+            return result.scalar_one_or_none()
         return None
 
     @staticmethod
@@ -127,7 +139,7 @@ class AuthService:
         for log in logs.logs:
             db_log = BridgeLog(
                 app_id=app_id,
-                timestamp=log.timestamp or datetime.utcnow(),
+                timestamp=log.timestamp or datetime.now(UTC),
                 level=log.level,
                 message=log.message,
                 connection_id=log.connection_id,
