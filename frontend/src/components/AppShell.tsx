@@ -1,6 +1,8 @@
-import { Box, Flex, Text, Stack, Button } from '@chakra-ui/react';
+import { Box, Flex, Text, Stack, Button, HStack, Divider, IconButton, Tooltip } from '@chakra-ui/react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { StatusBar } from './StatusBar';
+import { useAuth } from '../contexts/AuthContext';
+import { FiLogOut } from 'react-icons/fi';
 
 interface NavButtonProps {
   to: string;
@@ -29,6 +31,12 @@ function NavButton({ to, children }: NavButtonProps) {
 }
 
 export function AppShell() {
+  const { logout } = useAuth();
+  
+  const handleLogout = async () => {
+    await logout();
+  };
+
   return (
     <Flex h="100vh">
       <Box
@@ -54,6 +62,20 @@ export function AppShell() {
               <NavButton to="/help">Help</NavButton>
             </Stack>
           </Box>
+          
+          <Divider my={4} />
+          
+          <Button
+            variant="ghost"
+            w="full"
+            justifyContent="flex-start"
+            leftIcon={<FiLogOut />}
+            onClick={handleLogout}
+            colorScheme="red"
+            size="sm"
+          >
+            Logout
+          </Button>
         </Stack>
       </Box>
 
@@ -65,9 +87,20 @@ export function AppShell() {
           borderColor="gray.200"
           p={4}
         >
-          <Text fontSize="xl" fontWeight="bold">
-            MCP Gateway
-          </Text>
+          <Flex justify="space-between" align="center">
+            <Text fontSize="xl" fontWeight="bold">
+              MCP Gateway
+            </Text>
+            <Tooltip label="Logout">
+              <IconButton
+                icon={<FiLogOut />}
+                aria-label="Logout"
+                variant="ghost"
+                onClick={handleLogout}
+                size="sm"
+              />
+            </Tooltip>
+          </Flex>
         </Box>
 
         <Box flex={1} p={4} position="relative" bg="gray.50">

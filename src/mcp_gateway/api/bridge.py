@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 import json
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List, Any, Union
 import uuid
 import logging
 import os
@@ -12,6 +12,7 @@ from ..services.auth import AuthService
 from ..core.bridge import MCPBridge
 from ..tools import ToolRegistry
 from ..schemas.auth import BridgeLogBatchCreate, BridgeLogList, BridgeLogResponse
+from ..api.admin_auth import get_session
 
 router = APIRouter()
 
@@ -33,22 +34,45 @@ logger.addHandler(file_handler)
 # Store active bridge connections
 bridge_connections: Dict[str, MCPBridge] = {}
 
+# Dependency to get authentication - supports both API key and session
+async def get_authentication(
+    request: Request,
+    api_key: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+) -> Union[AppID, None]:
+    """Get auth from either API key or session cookie."""
+    # First check if API key was provided
+    if api_key:
+        # Validate API key
+        auth_service = AuthService(db)
+        app = await auth_service.get_app_by_api_key(api_key)
+        return app
+    
+    # If no API key, check for session cookie
+    authenticated, _ = get_session(request)
+    if authenticated:
+        # Admin is authenticated via session, allow access to any app
+        # For a more secure implementation, you might want to check specific permissions
+        return True
+    
+    # Neither API key nor valid session
+    raise HTTPException(status_code=401, detail="Unauthorized")
+
 @router.post("/heartbeat")
 async def bridge_heartbeat(
     request: dict,
-    api_key: str = Depends(AuthService.get_api_key),
+    api_key: Optional[str] = Depends(AuthService.get_api_key),
+    auth: Any = Depends(get_authentication),
     db: AsyncSession = Depends(get_db)
 ):
     """Handle bridge heartbeat"""
     try:
-        # Update last_connected timestamp
-        auth_service = AuthService(db)
-        app = await auth_service.get_app_by_api_key(api_key)
-        if not app:
-            raise HTTPException(status_code=401, detail="Invalid API key")
-        
-        app.last_connected = datetime.utcnow()
-        await db.commit()
+        # If we got here, auth was successful
+        if isinstance(auth, AppID):
+            # Update last_connected timestamp for the app
+            app = auth
+            app.last_connected = datetime.utcnow()
+            await db.commit()
         
         return {
             "status": "ok",
@@ -116,14 +140,35 @@ async def handle_websocket(
 @router.post("/logs", response_model=List[BridgeLogResponse])
 async def create_logs(
     logs: BridgeLogBatchCreate,
-    api_key: str = Depends(AuthService.get_api_key),
+    request: Request,
+    api_key: Optional[str] = Query(None, include_in_schema=True),
+    auth: Any = Depends(get_authentication),
     db: AsyncSession = Depends(get_db)
 ):
     """Create multiple log entries."""
     try:
         auth_service = AuthService(db)
-        # The API key is already validated by the dependency
-        app = await auth_service.get_app_by_api_key(api_key)
+        
+        # If authenticated via API key, get the app
+        if isinstance(auth, AppID):
+            app = auth
+        else:
+            # For admin session, we need to get the app from the request body
+            # This assumes the first log entry's app_id is correct for all logs
+            if not logs.logs:
+                raise HTTPException(status_code=400, detail="No logs provided")
+            
+            # Ensure all logs have the same app_id
+            app_ids = set(log.app_id for log in logs.logs if hasattr(log, 'app_id'))
+            if len(app_ids) > 1:
+                raise HTTPException(status_code=400, detail="All logs must have the same app_id")
+            
+            # Get the app by ID
+            if hasattr(logs.logs[0], 'app_id'):
+                app = await auth_service.get_app_by_id(logs.logs[0].app_id)
+            else:
+                raise HTTPException(status_code=400, detail="App ID not provided in logs")
+        
         created_logs = await auth_service.create_logs(app.id, logs)
         return created_logs
     except Exception as e:
@@ -133,12 +178,14 @@ async def create_logs(
 @router.get("/logs/{app_id}", response_model=BridgeLogList)
 async def get_logs(
     app_id: int,
+    request: Request,
     level: Optional[str] = Query(None, pattern="^(DEBUG|INFO|WARNING|ERROR)$"),
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
     limit: int = Query(default=100, le=1000),
     offset: int = 0,
-    api_key: str = Depends(AuthService.get_api_key),
+    api_key: Optional[str] = Query(None, include_in_schema=True),
+    auth: Any = Depends(get_authentication),
     db: AsyncSession = Depends(get_db)
 ):
     """Get logs for an app with filtering."""

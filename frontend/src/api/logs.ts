@@ -1,5 +1,4 @@
 import { API_BASE_URL } from '../config'
-import { getApiKey } from './auth'
 
 export interface LogEntry {
     id: number
@@ -43,9 +42,7 @@ export const fetchLogs = async (appId: number, filter: LogsFilter): Promise<Logs
     });
 
     const response = await fetch(`${API_BASE_URL}/api/bridge/logs/${appId}?${params.toString()}`, {
-        headers: {
-            'X-API-Key': getApiKey(),
-        },
+        credentials: 'include', // Use session cookie for authentication
     });
 
     if (!response.ok) {

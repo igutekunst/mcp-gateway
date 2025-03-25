@@ -123,10 +123,13 @@ class AuthService:
 
     @staticmethod
     async def get_api_key(
-        api_key: str = Header(..., alias="X-API-Key"),
+        api_key: Optional[str] = Header(None, alias="X-API-Key"),
         db: AsyncSession = Depends(get_db)
-    ) -> str:
+    ) -> Optional[str]:
         """FastAPI dependency to get and validate API key"""
+        if not api_key:
+            return None
+            
         auth_service = AuthService(db)
         app = await auth_service.verify_api_key(api_key)
         if not app:

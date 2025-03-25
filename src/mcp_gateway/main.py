@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from .api.auth import router as auth_router
 from .api.health import router as health_router
 from .api.bridge import router as bridge_router
+from .api.admin_auth import router as admin_auth_router
 from .models.base import Base, engine
 
 app = FastAPI(
@@ -29,6 +30,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth")
 app.include_router(health_router, prefix="/api")
 app.include_router(bridge_router, prefix="/api/bridge")
+app.include_router(admin_auth_router, prefix="/api/auth/admin")
 
 # Mount static files
 static_dir = Path(__file__).parent / "static"
