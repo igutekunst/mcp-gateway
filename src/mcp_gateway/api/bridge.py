@@ -6,10 +6,14 @@ from typing import Dict, Optional, List, Any, Union
 import uuid
 import logging
 import os
+import platform
+import sys
+from pathlib import Path
 from ..models.base import get_db, AsyncSessionLocal
 from ..models.auth import AppID, APIKey
 from ..services.auth import AuthService
 from ..core.bridge import MCPBridge
+from ..core.utils import get_logs_dir
 from ..tools import ToolRegistry
 from ..schemas.auth import BridgeLogBatchCreate, BridgeLogList, BridgeLogResponse
 from ..api.admin_auth import get_session
@@ -21,15 +25,19 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())  # Prevent output to stdout
 logger.setLevel(logging.DEBUG)
 
-# Create logs directory if it doesn't exist
-os.makedirs("logs", exist_ok=True)
-
-# Add file handler for bridge API logs
-file_handler = logging.FileHandler("logs/bridge_api.log")
-file_handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+# Get logs directory from core.utils
+logs_dir = get_logs_dir()
+if logs_dir:
+    try:
+        # Add file handler for bridge API logs
+        file_handler = logging.FileHandler(str(logs_dir / "bridge_api.log"))
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        logger.debug("Bridge API logging initialized to " + str(logs_dir))
+    except (OSError, IOError) as e:
+        print(f"Warning: Could not set up file logging for bridge API: {e}", file=sys.stderr)
 
 # Store active bridge connections
 bridge_connections: Dict[str, MCPBridge] = {}

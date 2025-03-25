@@ -4,8 +4,11 @@ import httpx
 from datetime import datetime, UTC
 from typing import List, Dict, Any, Optional
 import json
+import sys
+from pathlib import Path
 from ..schemas.auth import BridgeLogCreate, BridgeLogBatchCreate
 from fastapi.testclient import TestClient
+from .utils import get_logs_dir
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +42,25 @@ class BridgeLogger:
         """Set up file-based logging as fallback."""
         self.file_logger = logging.getLogger(f"bridge.{self.connection_id}")
         if not self.file_logger.handlers:
-            handler = logging.FileHandler(f"logs/bridge_{self.connection_id}.log")
-            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            self.file_logger.addHandler(handler)
-            self.file_logger.setLevel(logging.DEBUG)
+            logs_dir = get_logs_dir()
+            
+            if logs_dir:
+                try:
+                    # Create connection-specific log file
+                    log_file = logs_dir / f"bridge_{self.connection_id}.log"
+                    handler = logging.FileHandler(str(log_file))
+                    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+                    handler.setFormatter(formatter)
+                    self.file_logger.addHandler(handler)
+                    self.file_logger.setLevel(logging.DEBUG)
+                    self.file_logger.debug(f"Bridge logger initialized at {log_file}")
+                except (OSError, IOError) as e:
+                    # Fall back to memory-only logging if file logging fails
+                    print(f"Warning: Failed to set up file logging for bridge: {e}", file=sys.stderr)
+                    self.file_logger.addHandler(logging.NullHandler())
+            else:
+                # No logs directory available, use null handler
+                self.file_logger.addHandler(logging.NullHandler())
     
     def start(self):
         """Start the periodic flush task."""

@@ -1,26 +1,34 @@
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 from pydantic import BaseModel, ConfigDict
 import json
 from fastapi import WebSocket
 from datetime import datetime
 import logging
 import os
+import platform
+from pathlib import Path
+import sys
+import asyncio
 from .logging import BridgeLogger
+from .utils import get_logs_dir
 
 # Configure logging to only write to file
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())  # Prevent output to stdout
 logger.setLevel(logging.DEBUG)
 
-# Create logs directory if it doesn't exist
-os.makedirs("logs", exist_ok=True)
-
-# Add file handler for bridge logs
-file_handler = logging.FileHandler("logs/bridge.log")
-file_handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+# Set up logging to file
+logs_dir = get_logs_dir()
+if logs_dir:
+    # Add file handler for bridge logs
+    try:
+        file_handler = logging.FileHandler(str(logs_dir / "bridge.log"))
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except (OSError, IOError) as e:
+        print(f"Warning: Could not set up file logging: {e}", file=sys.stderr)
 
 class MCPRequest(BaseModel):
     jsonrpc: str = "2.0"
